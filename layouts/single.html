@@ -1,0 +1,15 @@
+{{ define "main" }}
+<article>
+  <header class="article-header">
+    <h1>{{ .Title }}</h1>
+    {{ if eq .Section "posts" }}
+    {{ with .Date }}<time datetime="{{ .Format "2006-01-02" }}">{{ .Format "2006-01-02" }}</time>{{ end }}
+    {{ $tags := .GetTerms "tags" }}{{ with $tags }}
+    <ul class="terms" aria-label="文章标签">{{ range . }}<li><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></li>{{ end }}</ul>
+    {{ end }}
+    {{ end }}
+  </header>
+  {{ with .Params.cover }}<img class="cover" src="{{ . }}" alt="">{{ end }}
+  <div class="article-body">{{ .Content }}</div>
+</article>
+{{ end }}

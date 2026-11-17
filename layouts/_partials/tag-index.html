@@ -1,0 +1,12 @@
+{{ $featured := slice "技术干货" "AI前沿" "好书快读" }}
+{{ $terms := . }}
+<ul class="tag-index">
+  {{ range $name := $featured }}
+    {{ range $terms }}
+      {{ if eq .Page.LinkTitle $name }}{{ partial "tag-index-item.html" . }}{{ end }}
+    {{ end }}
+  {{ end }}
+  {{ range $terms }}
+    {{ if not (in $featured .Page.LinkTitle) }}{{ partial "tag-index-item.html" . }}{{ end }}
+  {{ end }}
+</ul>

@@ -1,0 +1,41 @@
+<section class="activity-calendar" aria-labelledby="calendar-title" data-publication-calendar>
+  <div class="calendar-heading">
+    <h2 id="calendar-title">文章发布热力图</h2>
+    <label>年份 <select id="calendar-year" aria-controls="calendar-days"></select></label>
+  </div>
+  <div class="calendar-period" hidden>
+    <button class="calendar-prev" type="button" aria-label="上一个季度">‹</button>
+    <span class="calendar-range" aria-live="polite"></span>
+    <button class="calendar-next" type="button" aria-label="下一个季度">›</button>
+  </div>
+  <div class="calendar-scroll" aria-label="发文热力图">
+    <div class="calendar-grid">
+      <div class="calendar-months" aria-hidden="true"></div>
+      <div class="calendar-weekdays" aria-hidden="true"><span>一</span><span>三</span><span>五</span></div>
+      <div class="calendar-days" id="calendar-days" aria-label="按日期查看发文数"></div>
+    </div>
+  </div>
+  <section class="calendar-detail" aria-labelledby="calendar-date" hidden>
+    <h3 id="calendar-date" tabindex="-1"></h3>
+    <ul></ul>
+  </section>
+  <div class="calendar-footer">
+    <div class="calendar-meta">
+      <p class="calendar-summary" aria-live="polite"></p>
+      <span>点击日期查看文章</span>
+    </div>
+    <span class="calendar-legend" aria-label="颜色从浅到深表示发文量从少到多">少
+      {{ range seq 0 4 }}<i aria-hidden="true" data-level="{{ . }}"></i>{{ end }} 多
+    </span>
+  </div>
+  <template class="calendar-data">
+    {{/* Publication dates in the modern archive use Beijing time (UTC+8). */}}
+    {{ range . }}
+      {{ $published := .PublishDate }}
+      {{ if $published.IsZero }}{{ $published = .Date }}{{ end }}
+      {{ if not $published.IsZero }}<time datetime="{{ ($published.UTC.Add (time.ParseDuration "8h")).Format "2006-01-02" }}"><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></time>{{ end }}
+    {{ end }}
+  </template>
+  <script src="{{ "heatmap.js" | relURL }}?v={{ substr (sha256 (readFile "static/heatmap.js")) 0 12 }}" defer></script>
+  <noscript><p>开启 JavaScript 后可查看发文日历。</p></noscript>
+</section>

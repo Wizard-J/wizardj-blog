@@ -1,0 +1,10 @@
+{{ define "main" }}
+{{ $posts := (where site.RegularPages "Section" "posts").ByDate.Reverse }}
+{{ if $posts }}
+  {{ $pager := .Paginate $posts }}
+  {{ partial "article-index.html" (dict "pager" $pager "posts" $posts "hideTitle" (eq $pager.PageNumber 1)) }}
+{{ else }}
+  <h1>文章</h1>
+  <p>文章内容暂未添加。请将文章文件放入 <code>content/posts/</code> 后重新构建。</p>
+{{ end }}
+{{ end }}

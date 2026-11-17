@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ if not .IsHome }}{{ .Title }} · {{ end }}{{ site.Title }}</title>
+  <link rel="canonical" href="{{ .Permalink }}">
+  <link rel="stylesheet" href="{{ "blog.css" | relURL }}?v={{ substr (sha256 (readFile "static/blog.css")) 0 12 }}">
+  {{ with .OutputFormats.Get "RSS" }}<link rel="alternate" type="application/rss+xml" href="{{ .RelPermalink }}">{{ end }}
+</head>
+<body{{ if or (eq .RelPermalink ("/about/" | relURL)) (and (eq .Kind "taxonomy") (eq .Data.Plural "tags")) }} class="short-page"{{ end }}>
+<header class="site-header">
+  <a class="site-title" href="{{ "/" | relURL }}">{{ site.Title }}</a>
+  <nav aria-label="主导航">
+    <a href="{{ "/" | relURL }}">文章</a>
+    <a href="{{ "/tags/" | relURL }}">标签</a>
+    <a href="{{ "/about/" | relURL }}">关于</a>
+  </nav>
+</header>
+<main>{{ block "main" . }}{{ end }}</main>
+{{ partial "site-footer.html" . }}
+</body>
+</html>

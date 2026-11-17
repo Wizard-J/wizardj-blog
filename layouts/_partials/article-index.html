@@ -1,0 +1,3 @@
+{{ if not .hideTitle }}<h1>文章</h1>{{ end }}
+{{ if eq .pager.PageNumber 1 }}{{ partial "heatmap.html" .posts }}{{ end }}
+{{ partial "article-list.html" .pager }}

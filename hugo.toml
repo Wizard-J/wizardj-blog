@@ -1,0 +1,24 @@
+baseURL = 'https://wizardj.cn/'
+locale = 'zh-CN'
+title = '丁丁盯钉钉'
+enableRobotsTXT = true
+
+[params]
+icp = '鄂ICP备18028043号'
+
+[pagination]
+pagerSize = 20
+
+[permalinks.page]
+posts = '/archives/:slug/'
+
+[markup.highlight]
+style = 'github'
+
+[security]
+allowContent = ['! ^text/org$']
+
+[[module.mounts]]
+source = 'content'
+target = 'content'
+files = ['**', '!posts/**']

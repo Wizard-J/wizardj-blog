@@ -1,0 +1,9 @@
+<footer class="site-footer">
+  <a class="footer-subscribe" href="{{ "/index.xml" | relURL }}">订阅文章（RSS）</a>
+  <div class="footer-records">
+    {{ with site.Params.icp }}<a href="https://beian.miit.gov.cn/">{{ . }}</a>{{ end }}
+    {{ with site.Params.publicSecurity }}
+      {{ if and .number .url }}<a href="{{ .url }}">{{ .number }}</a>{{ end }}
+    {{ end }}
+  </div>
+</footer>

@@ -1,0 +1,9 @@
+/public/
+/resources/
+/.hugo_build.lock
+/.venv/
+/.DS_Store
+/assistant/
+/drafts/
+# `content/posts` may point to a private external symlink target.
+/content/posts

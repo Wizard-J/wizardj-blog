@@ -1,0 +1,17 @@
+{{ define "main" }}
+{{ if and .IsSection (eq .Section "posts") }}
+{{ $posts := .RegularPages.ByDate.Reverse }}
+{{ partial "article-index.html" (dict "pager" (.Paginate $posts) "posts" $posts) }}
+{{ else }}
+<h1>{{ if eq .Section "posts" }}文章{{ else if eq .Title "Tags" }}标签{{ else if eq .Title "Categories" }}分类{{ else }}{{ .Title }}{{ end }}</h1>
+{{ if eq .Kind "taxonomy" }}
+{{ if eq .Data.Plural "tags" }}
+{{ partial "tag-index.html" .Data.Terms.Alphabetical }}
+{{ else }}
+<ul class="terms">{{ range .Data.Terms.Alphabetical }}<li><a href="{{ .Page.RelPermalink }}">{{ .Page.LinkTitle }}</a> <span>{{ .Count }}</span></li>{{ end }}</ul>
+{{ end }}
+{{ else }}
+{{ partial "article-list.html" (.Paginate .RegularPages.ByDate.Reverse) }}
+{{ end }}
+{{ end }}
+{{ end }}
