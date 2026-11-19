@@ -11,10 +11,14 @@ import subprocess
 import sys
 from urllib.parse import urlsplit
 
+import cf_status
+
 UNIT = "home-weixin-chat.service"
 ROOT = Path(__file__).resolve().parent
 PAGE = "/assistant/weixin/"
 SNAPSHOT = Path("/var/lib/home-weixin-status/status.json")
+CF_PAGE = "/assistant/cf-select/"
+CF_SNAPSHOT = SNAPSHOT.with_name("cf-select.json")
 EVENT = re.compile(
     r"(openai_api_reply_generated|weixin_reply_accepted|gpt_reply_failed|"
     r"weixin_reply_failed|weixin_poll_failed)(?: ([a-zA-Z0-9_.-]{1,64}))?"
@@ -85,20 +89,23 @@ class Handler(BaseHTTPRequestHandler):
             PAGE: ("weixin-status.html", "text/html; charset=utf-8"),
             PAGE + "status.css": ("weixin-status.css", "text/css; charset=utf-8"),
             PAGE + "status.js": ("weixin-status.js", "text/javascript; charset=utf-8"),
+            CF_PAGE: ("cf-status.html", "text/html; charset=utf-8"),
+            CF_PAGE + "status.js": ("cf-status.js", "text/javascript; charset=utf-8"),
         }
         if path in routes:
             name, content_type = routes[path]
             return self.send_data(200, content_type, (ROOT / name).read_bytes())
-        if path != PAGE + "status.json":
+        source = {PAGE + "status.json": SNAPSHOT, CF_PAGE + "status.json": CF_SNAPSHOT}.get(path)
+        if source is None:
             return self.send_data(404, "text/plain", b"Not found")
         try:
-            data = json.loads(SNAPSHOT.read_bytes())
+            data = json.loads(source.read_bytes())
             age = datetime.now(timezone.utc) - datetime.fromisoformat(data["sampled_at"])
             if age.total_seconds() > 90:
                 raise ValueError("stale snapshot")
             status = 200
         except (OSError, subprocess.SubprocessError, ValueError, KeyError):
-            data, status = {"error": "暂时无法读取机器人状态。"}, 503
+            data, status = {"error": "暂时无法读取状态。"}, 503
         self.send_data(status, "application/json; charset=utf-8", json.dumps(data, ensure_ascii=False).encode())
 
     def send_data(self, status, content_type, body):
@@ -113,11 +120,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--collect"]:
-        data = snapshot()
-        tmp = SNAPSHOT.with_suffix(".tmp")
+    if sys.argv[1:] in (["--collect"], ["--collect-cf"]):
+        target = SNAPSHOT if sys.argv[1] == "--collect" else CF_SNAPSHOT
+        data = snapshot() if target == SNAPSHOT else cf_status.collect(cmd)
+        data["sampled_at"] = datetime.now(timezone.utc).isoformat()
+        tmp = target.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False))
         os.chmod(tmp, 0o640)
-        tmp.replace(SNAPSHOT)
+        tmp.replace(target)
     else:
         ThreadingHTTPServer(("127.0.0.1", 18767), Handler).serve_forever()

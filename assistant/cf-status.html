@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>优选节点 · 博客后台</title>
+  <link rel="stylesheet" href="/assistant/chat.css">
+  <link rel="stylesheet" href="/assistant/weixin/status.css">
+  <script src="status.js" defer></script>
+</head>
+<body>
+  <header class="app-header"><a class="toolbar-button" href="/assistant/?persona=wizard">返回博客后台</a></header>
+  <main class="bot-status">
+    <div class="status-heading">
+      <h1>优选节点</h1>
+      <button class="toolbar-button" id="refresh" type="button">刷新</button>
+    </div>
+    <p id="notice" role="status">正在读取状态…</p>
+    <dl class="status-grid">
+      <div><dt>最近一轮</dt><dd id="run">—</dd></div>
+      <div><dt>下次计划运行</dt><dd id="next">—</dd></div>
+      <div><dt>订阅发布</dt><dd id="publish">—</dd></div>
+      <div><dt>候选通过 / 测试</dt><dd id="totals">—</dd></div>
+      <div><dt>入选节点</dt><dd id="selected">—</dd></div>
+      <div><dt>客户端测速中位数</dt><dd id="latency">—</dd></div>
+    </dl>
+    <section aria-labelledby="sources-title">
+      <h2 id="sources-title">候选来源</h2>
+      <ul class="event-list" id="sources"></ul>
+    </section>
+    <section aria-labelledby="rejections-title">
+      <h2 id="rejections-title">淘汰原因</h2>
+      <ul class="event-list" id="rejections"></ul>
+    </section>
+  </main>
+</body>
+</html>
