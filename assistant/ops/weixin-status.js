@@ -45,3 +45,9 @@ async function refresh() {
 
 el('refresh').addEventListener('click', refresh);
 refresh();
+
+const sourceRole = new URLSearchParams(location.search).get('persona');
+if (sourceRole === 'munger' || sourceRole === 'wizard') {
+  const back = document.getElementById('back-to-tools');
+  back.href = '/assistant/?panel=tools&persona=' + sourceRole;
+}

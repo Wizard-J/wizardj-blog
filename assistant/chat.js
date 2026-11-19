@@ -5,6 +5,10 @@ const question = document.querySelector("#question");
 const status = document.querySelector("#status");
 const clear = document.querySelector("#clear");
 const send = form.querySelector("[type=submit]");
+const stopChat = document.querySelector("#stop-chat");
+const latestChat = document.querySelector("#latest-chat");
+let chatStream;
+let followChat = true;
 const welcome = document.querySelector("#welcome");
 const scrollArea = document.querySelector("#scroll-area");
 const historyButton = document.querySelector("#history-button");
@@ -19,6 +23,7 @@ const contextFile = document.querySelector("#context-file");
 const contextImport = document.querySelector("#context-import");
 const contextSave = document.querySelector("#context-save");
 const contextStatus = document.querySelector("#context-status");
+const contextRetry = document.querySelector("#context-retry");
 const personaButton = document.querySelector("#persona-button");
 const personaOptions = document.querySelector("#persona-options");
 const personaSwitcher = personaButton.parentElement;
@@ -88,11 +93,100 @@ for (const option of personaOptions.querySelectorAll("[data-persona-option]")) {
     });
   }
 }
+const panel = document.querySelector("#assistant-panel");
+const panelStack = [];
+const panelScroll = new WeakMap();
+let panelTrigger;
+let panelClosing = false;
+
+function currentPanel() {
+  return panelStack.at(-1)?.view;
+}
+
+function hidePanelView(view) {
+  panelScroll.set(view, view.querySelector(".panel-body").scrollTop);
+  view.hidden = true;
+}
+
+function revealPanelView(view, direction) {
+  view.hidden = false;
+  view.dataset.enter = direction;
+  view.querySelector(".panel-body").scrollTop = panelScroll.get(view) || 0;
+  panel.setAttribute("aria-labelledby", view.querySelector("h2").id);
+}
+
+function showPanel(view, trigger = document.activeElement) {
+  if (panelClosing || currentPanel() === view) return false;
+  const previous = currentPanel();
+  if (previous) {
+    hidePanelView(previous);
+  } else {
+    panelTrigger = trigger;
+  }
+  panelStack.push({view, trigger});
+  revealPanelView(view, previous ? "forward" : "");
+  view.querySelector(".panel-back").hidden = !previous;
+  if (!panel.open) {
+    panel.showModal();
+    // Commit the offscreen position before starting the entrance transition.
+    panel.getBoundingClientRect();
+    panel.classList.add("is-visible");
+    view.querySelector(".panel-body").scrollTop = panelScroll.get(view) || 0;
+  }
+  const control = view.querySelector(previous ? ".panel-back" : ".panel-close");
+  control.focus({preventScroll: true});
+  return true;
+}
+
+function leavePanel(view) {
+  if (!view.hidden) hidePanelView(view);
+  view.dispatchEvent(new Event("panel-leave"));
+}
+
+function returnInPanel() {
+  if (panelClosing || panelStack.length < 2 || publishBusy) return;
+  const {view, trigger} = panelStack.pop();
+  leavePanel(view);
+  const previous = currentPanel();
+  revealPanelView(previous, "back");
+  const destination = previous.contains(trigger) && trigger.isConnected && !trigger.disabled
+    ? trigger : previous.querySelector(".panel-close");
+  destination.focus({preventScroll: true});
+}
+
+async function closePanel(destination = panelTrigger) {
+  if (!panel.open || panelClosing || publishBusy) return;
+  panelClosing = true;
+  panel.classList.remove("is-visible");
+  // Read the new styles so the exit transition is registered before waiting.
+  panel.getBoundingClientRect();
+  try {
+    await Promise.allSettled(panel.getAnimations().map(animation => animation.finished));
+  } finally {
+    for (const {view} of panelStack.splice(0).reverse()) leavePanel(view);
+    panel.close();
+    panelClosing = false;
+    destination?.focus({preventScroll: true});
+  }
+}
+
+let pressedBackdrop = false;
+panel.addEventListener("pointerdown", event => {
+  pressedBackdrop = event.target === panel;
+});
+panel.addEventListener("click", event => {
+  if (event.target.closest(".panel-back")) returnInPanel();
+  else if ((event.target === panel && pressedBackdrop) || event.target.closest(".panel-close")) closePanel();
+  pressedBackdrop = false;
+});
+panel.addEventListener("cancel", event => {
+  event.preventDefault();
+  closePanel();
+});
+
 const toolsDialog = document.querySelector("#tools-dialog");
-document.querySelector("#tools-button").addEventListener("click", () => toolsDialog.showModal());
-toolsDialog.addEventListener("click", event => {
-  if (event.target.closest("button[aria-haspopup='dialog']")) toolsDialog.close();
-}, {capture: true});
+const toolsButton = document.querySelector("#tools-button");
+toolsButton.addEventListener("click", () => showPanel(toolsDialog, toolsButton));
 welcome.querySelector("img").src = profile.avatar;
 welcome.querySelector("h1").textContent = "你好，我是" + profile.name;
 welcome.querySelector("p").textContent = profile.intro;
@@ -138,7 +232,48 @@ function setChatBusy(busy) {
 
 function scrollToLatest() {
   scrollArea.scrollTop = scrollArea.scrollHeight;
+  followChat = true;
+  latestChat.hidden = true;
 }
+
+function updateChatPosition() {
+  followChat = scrollArea.scrollHeight - scrollArea.scrollTop - scrollArea.clientHeight < 48;
+  latestChat.hidden = followChat;
+}
+
+function followLatest() {
+  if (followChat) scrollToLatest();
+}
+
+scrollArea.addEventListener("scroll", updateChatPosition, {passive: true});
+latestChat.addEventListener("click", () => {
+  scrollToLatest();
+  scrollArea.focus({preventScroll: true});
+});
+stopChat.addEventListener("click", () => chatStream?.abort());
+
+function composerKey() {
+  return "wizardj." + persona + ".composer." + (activeSession || "new");
+}
+
+function saveComposer() {
+  try {
+    if (question.value) sessionStorage.setItem(composerKey(), question.value);
+    else sessionStorage.removeItem(composerKey());
+  } catch {
+    // The editor still works when session storage is unavailable.
+  }
+}
+
+function restoreComposer() {
+  try {
+    question.value = sessionStorage.getItem(composerKey()) || "";
+  } catch {
+    question.value = "";
+  }
+}
+
+question.addEventListener("input", saveComposer);
 
 question.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
@@ -319,13 +454,17 @@ function showSession(session) {
   }
   welcome.hidden = Boolean(messages.length);
   status.textContent = "";
-  question.value = "";
   rememberSession(session?.id || null);
+  restoreComposer();
   scrollToLatest();
 }
 
 async function openSession(id) {
   showSession(await requestJson("session?id=" + encodeURIComponent(id)));
+}
+
+function historySelectionFocus() {
+  return matchMedia("(pointer: coarse)").matches ? historyButton : question;
 }
 
 function renderSessions(sessions) {
@@ -338,6 +477,7 @@ function renderSessions(sessions) {
     const date = new Date(session.updated_at);
     button.type = "button";
     button.className = "session-button";
+    button.dataset.sessionId = session.id;
     if (session.id === activeSession) button.setAttribute("aria-current", "true");
     title.textContent = session.title || "未命名对话";
     button.append(title);
@@ -347,18 +487,31 @@ function renderSessions(sessions) {
       button.append(updated);
     }
     button.addEventListener("click", async () => {
+      if (button.disabled || openingSession) return;
+      if (session.id === activeSession) {
+        closePanel(historySelectionFocus());
+        return;
+      }
+      openingSession = true;
       setChatBusy(true);
-      historyStatus.textContent = "正在打开对话…";
+      const label = title.textContent;
+      title.textContent = label + " · 正在打开…";
+      historyStatus.textContent = "";
       const choices = [...sessionList.querySelectorAll("button")];
       for (const choice of choices) choice.disabled = true;
       try {
-        await openSession(session.id);
-        if (historyDialog.open) historyDialog.close();
-        question.focus();
+        const selected = await requestJson("session?id=" + encodeURIComponent(session.id));
+        if (currentPanel() !== historyDialog || panelClosing) return;
+        showSession(selected);
+        updateCurrentSession();
+        setChatBusy(false);
+        await closePanel(historySelectionFocus());
       } catch (error) {
         historyStatus.textContent = "无法打开对话。" + error.message;
       } finally {
+        openingSession = false;
         setChatBusy(false);
+        title.textContent = label;
         for (const choice of choices) choice.disabled = false;
       }
     });
@@ -367,21 +520,43 @@ function renderSessions(sessions) {
   }
 }
 
+function updateCurrentSession() {
+  for (const button of sessionList.querySelectorAll("button")) {
+    if (button.dataset.sessionId === activeSession) button.setAttribute("aria-current", "true");
+    else button.removeAttribute("aria-current");
+  }
+}
+
+let loadingSessions = false;
+let openingSession = false;
+
 async function refreshSessions() {
-  historyStatus.textContent = "正在加载历史记录…";
-  sessionList.replaceChildren();
+  updateCurrentSession();
+  if (loadingSessions) return;
+  loadingSessions = true;
+  historyStatus.textContent = sessionList.children.length ? "" : "正在加载历史记录…";
   try {
     const {sessions} = await requestJson("sessions");
+    if (openingSession) return;
+    const focusedId = document.activeElement?.dataset.sessionId;
+    const body = historyDialog.querySelector(".panel-body");
+    const previousScroll = body.scrollTop;
     renderSessions(sessions);
+    if (!historyDialog.hidden) body.scrollTop = previousScroll;
+    if (focusedId) {
+      const focused = [...sessionList.querySelectorAll("button")].find(button => button.dataset.sessionId === focusedId);
+      (focused || historyDialog.querySelector(".panel-close")).focus({preventScroll: true});
+    }
     historyStatus.textContent = sessions.length ? "" : "还没有保存的对话。";
   } catch (error) {
     historyStatus.textContent = "无法加载历史记录。" + error.message;
+  } finally {
+    loadingSessions = false;
   }
 }
 
 historyButton.addEventListener("click", () => {
-  historyDialog.showModal();
-  refreshSessions();
+  if (showPanel(historyDialog, historyButton)) refreshSessions();
 });
 
 async function restoreSession() {
@@ -409,10 +584,18 @@ function showContext(content) {
   contextPreview = contextContent.value;
 }
 
-contextButton.addEventListener("click", async () => {
-  contextDialog.showModal();
-  showContext("");
+contextButton.addEventListener("click", () => {
+  if (showPanel(contextDialog, contextButton) && !contextButton.disabled) loadContext();
+});
+contextRetry.addEventListener("click", loadContext);
+
+async function loadContext() {
+  if (contextContent.value !== contextPreview) {
+    contextStatus.textContent = "有未保存的修改。";
+    return;
+  }
   contextStatus.textContent = "正在加载上下文…";
+  contextRetry.hidden = true;
   setContextBusy(true);
   try {
     const {content} = await requestJson("context");
@@ -422,7 +605,12 @@ contextButton.addEventListener("click", async () => {
   } catch (error) {
     contextStatus.textContent = "无法加载已保存的上下文。" + error.message;
     contextButton.disabled = false;
+    contextRetry.hidden = false;
   }
+}
+
+contextContent.addEventListener("input", () => {
+  contextStatus.textContent = contextContent.value === contextPreview ? "" : "有未保存的修改。";
 });
 
 contextImport.addEventListener("click", () => contextFile.click());
@@ -438,7 +626,7 @@ contextFile.addEventListener("change", async () => {
   try {
     const content = new TextDecoder("utf-8", {fatal: true, ignoreBOM: true}).decode(await file.arrayBuffer());
     validateContext(content);
-    showContext(content);
+    contextContent.value = content;
     contextStatus.textContent = "已载入文件，请检查后保存。";
   } catch (error) {
     contextStatus.textContent = error instanceof TypeError ? "文件必须是 UTF-8 Markdown 文本。" : error.message;
@@ -480,7 +668,10 @@ form.addEventListener("submit", async (event) => {
   const userRow = addMessage("user", prompt, submittedAt).row;
   const answer = addMessage("assistant", "", submittedAt);
   setChatBusy(true);
+  chatStream = new AbortController();
+  stopChat.hidden = false;
   question.value = "";
+  saveComposer();
   let phraseIndex = 0;
   status.textContent = thinkingPhrases[phraseIndex];
   const thinking = setInterval(() => {
@@ -498,8 +689,12 @@ form.addEventListener("submit", async (event) => {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({session_id: submittedSession, message: prompt}),
+      signal: chatStream.signal,
     });
-    if (!response.ok) throw new Error("请求失败，请刷新页面后重试。");
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.error || "请求失败，请稍后重试。");
+    }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let pending = "";
     try {
@@ -521,7 +716,7 @@ form.addEventListener("submit", async (event) => {
             status.textContent = "";
             answer.row.hidden = false;
             updateSearch(answer.sources, data.search);
-            scrollToLatest();
+            followLatest();
           }
           if (data.text) {
             clearInterval(thinking);
@@ -529,7 +724,7 @@ form.addEventListener("submit", async (event) => {
             answer.row.hidden = false;
             answerText += data.text;
             answer.text.textContent = answerText;
-            scrollToLatest();
+            followLatest();
           }
           if (data.done) done = true;
         }
@@ -539,7 +734,14 @@ form.addEventListener("submit", async (event) => {
     }
     if (!done) throw new Error("对话响应中断。");
     renderMarkdown(answer.text, answerText);
-    rememberSession(receivedSession);
+    const nextInput = question.value;
+    if (receivedSession && activeSession !== receivedSession) {
+      question.value = "";
+      saveComposer();
+      rememberSession(receivedSession);
+      question.value = nextInput;
+      saveComposer();
+    }
     status.textContent = "";
     if (proposedDraft) {
       const previewButton = document.createElement("button");
@@ -550,8 +752,7 @@ form.addEventListener("submit", async (event) => {
       answer.text.after(previewButton);
       previewButton.addEventListener("click", () => {
         if (activeSession !== receivedSession) return;
-        draftButton.click();
-        showDraftPreview(proposedDraft);
+        if (openDraftPanel(previewButton)) showDraftPreview(proposedDraft);
       });
     }
     if (proposedTags) {
@@ -562,27 +763,29 @@ form.addEventListener("submit", async (event) => {
       answer.row.hidden = false;
       answer.text.after(previewButton);
       previewButton.addEventListener("click", () => {
-        if (activeSession === receivedSession) openTagPreview(proposedTags);
+        if (activeSession === receivedSession) openTagPreview(proposedTags, previewButton);
       });
     }
   } catch (error) {
-    userRow.remove();
-    answer.row.remove();
-    welcome.hidden = Boolean(conversation.children.length);
-    if (receivedSession) {
-      try {
-        // Completion may have been saved while the connection was interrupted.
-        await openSession(receivedSession);
-      } catch {
-        // Retain the existing conversation if the service is unavailable.
-      }
+    if (answerText) renderMarkdown(answer.text, answerText);
+    else if (!answer.sources.children.length) {
+      answer.row.remove();
+      userRow.remove();
     }
-    status.textContent = error.message;
-    question.value = prompt;
+    welcome.hidden = Boolean(conversation.children.length);
+    status.textContent = chatStream.signal.aborted ? "已停止接收回复。" : error.message;
+    if (!question.value) {
+      question.value = prompt;
+      saveComposer();
+    }
   } finally {
     clearInterval(thinking);
+    chatStream = null;
+    const restoreFocus = document.activeElement === stopChat || document.activeElement === send;
+    stopChat.hidden = true;
     setChatBusy(false);
-    question.focus();
+    followLatest();
+    if (restoreFocus) question.focus({preventScroll: true});
   }
 });
 
@@ -591,6 +794,7 @@ clear.addEventListener("click", () => {
   question.focus();
 });
 
+restoreComposer();
 restoreSession();
 
 const memoryDialog = document.querySelector("#memory-dialog");
@@ -617,20 +821,32 @@ function showMemory(data, append = false) {
 }
 
 async function refreshMemory(manual) {
-  memoryRefresh.disabled = true;
+  if (memoryRefresh.disabled) return;
+  memoryMore.disabled = memoryRefresh.disabled = true;
   memoryStatus.textContent = manual ? "正在核对并提炼原话…" : "正在读取记忆…";
   try {
-    showMemory(await requestJson(manual ? "memory/refresh" : "memory", manual ? {} : undefined));
+    const rendered = memoryList.children.length;
+    const data = await requestJson(manual ? "memory/refresh" : "memory", manual ? {} : undefined);
+    const items = [...data.items];
+    let nextOffset = data.next_offset;
+    while (items.length < rendered && nextOffset != null) {
+      const next = await requestJson("memory?offset=" + nextOffset);
+      items.push(...next.items);
+      nextOffset = next.next_offset;
+    }
+    const body = memoryDialog.querySelector(".panel-body");
+    const scroll = body.scrollTop;
+    showMemory({...data, items, next_offset: nextOffset});
+    if (!memoryDialog.hidden) body.scrollTop = scroll;
   } catch (error) {
     memoryStatus.textContent = error.message;
   } finally {
-    memoryRefresh.disabled = false;
+    memoryMore.disabled = memoryRefresh.disabled = false;
   }
 }
 
-document.querySelector("#memory-button").addEventListener("click", () => {
-  memoryDialog.showModal();
-  refreshMemory(false);
+document.querySelector("#memory-button").addEventListener("click", event => {
+  if (showPanel(memoryDialog, event.currentTarget) && !memoryList.children.length) refreshMemory(false);
 });
 memoryRefresh.addEventListener("click", () => refreshMemory(true));
 memoryMore.addEventListener("click", async () => {
@@ -695,7 +911,7 @@ async function loadPublicationPreview(selection) {
   const query = new URLSearchParams({source: selection.source, id: selection.id});
   try {
     const article = await requestJson("publish/preview?" + query);
-    if (request !== publishRequest || !publishDialog.open) return;
+    if (request !== publishRequest || currentPanel() !== publishDialog) return;
     if (article.id !== selection.id || article.source !== selection.source || typeof article.title !== "string") {
       throw new Error("待发布文章与所选草稿不符");
     }
@@ -720,25 +936,20 @@ async function loadPublicationPreview(selection) {
     } else {
       throw new Error("这份草稿暂时无法发布");
     }
-    publicationTitle.focus({preventScroll: true});
+
   } catch (error) {
-    if (request !== publishRequest || !publishDialog.open) return;
+    if (request !== publishRequest || currentPanel() !== publishDialog) return;
     publishStatus.textContent = error.message;
     setPublishActions("retry");
   }
 }
 
-function openPublicationPreview(source, id) {
-  if (!isWizard || !id || publishDialog.open) return;
-  publishDialog.showModal();
+function openPublicationPreview(source, id, trigger) {
+  if (!isWizard || !id || !showPanel(publishDialog, trigger)) return;
   loadPublicationPreview({source, id});
 }
 
-publishDialog.addEventListener("cancel", event => {
-  if (publishBusy) event.preventDefault();
-});
-publishDialog.addEventListener("close", () => {
-  if (publishDialog.open) return;
+publishDialog.addEventListener("panel-leave", () => {
   publishRequest++;
   publishSelection = null;
 });
@@ -747,7 +958,8 @@ publishRefresh.addEventListener("click", () => {
 });
 publishConfirm.addEventListener("click", async () => {
   if (!publishSelection?.revision || publishBusy) return;
-  publishBusy = publishClose.disabled = publishConfirm.disabled = true;
+  const back = publishDialog.querySelector(".panel-back");
+  publishBusy = back.disabled = publishClose.disabled = publishConfirm.disabled = true;
   publishStatus.textContent = "正在构建并发布站点，请等待结果…";
   try {
     const result = await requestJson("publish", publishSelection);
@@ -757,7 +969,7 @@ publishConfirm.addEventListener("click", async () => {
     publishStatus.textContent = error.message;
     publishRefresh.hidden = false;
   } finally {
-    publishBusy = publishClose.disabled = publishConfirm.disabled = false;
+    publishBusy = back.disabled = publishClose.disabled = publishConfirm.disabled = false;
   }
 });
 
@@ -799,10 +1011,9 @@ async function loadSavedDrafts() {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "toolbar-button";
-        button.setAttribute("aria-haspopup", "dialog");
         button.setAttribute("aria-label", "预览发布：" + draft.title);
         button.textContent = "预览发布";
-        button.addEventListener("click", () => openPublicationPreview("draft", draft.id));
+        button.addEventListener("click", () => openPublicationPreview("draft", draft.id, button));
         actions.append(link, button);
         item.append(title, actions);
       } else {
@@ -815,8 +1026,8 @@ async function loadSavedDrafts() {
   }
 }
 
-draftButton.addEventListener("click", () => {
-  draftDialog.showModal();
+function openDraftPanel(trigger) {
+  if (!showPanel(draftDialog, trigger)) return false;
   if (draftSession !== activeSession) {
     currentDraft = null;
     draftPreview.hidden = true;
@@ -826,7 +1037,10 @@ draftButton.addEventListener("click", () => {
   loadSavedDrafts();
   draftStatus.textContent = activeSession ? "" : "请先开始对话，或从历史记录打开一段对话。";
   draftPropose.disabled = !activeSession;
-});
+  return true;
+}
+
+draftButton.addEventListener("click", () => openDraftPanel(draftButton));
 
 function showDraftPreview(draft) {
   currentDraft = draft.id;
@@ -879,7 +1093,7 @@ draftConfirm.addEventListener("click", async () => {
   }
 });
 
-draftPublish.addEventListener("click", () => openPublicationPreview("draft", currentDraft));
+draftPublish.addEventListener("click", () => openPublicationPreview("draft", currentDraft, draftPublish));
 
 if (isWizard) {
   const articlesDialog = document.querySelector("#articles-dialog");
@@ -888,6 +1102,10 @@ if (isWizard) {
   const articlesStatus = document.querySelector("#articles-status");
   const articlesList = document.querySelector("#articles-list");
   const articleDetail = document.querySelector("#article-detail");
+  const articleContent = document.querySelector("#article-content");
+  const articleDetailStatus = document.querySelector("#article-detail-status");
+  const articleRetry = document.querySelector("#article-retry");
+  const articlesButton = document.querySelector("#articles-button");
   const articleLink = document.querySelector("#public-article");
   let articleRequest = 0;
 
@@ -897,13 +1115,17 @@ if (isWizard) {
     return [date, tags].filter(Boolean).join(" · ");
   }
 
-  async function openArticle(id) {
+  async function openArticle(id, trigger) {
+    if (currentPanel() !== articleDetail && !showPanel(articleDetail, trigger)) return;
+    articleRetry.onclick = () => openArticle(id);
+    articleRetry.hidden = true;
     const request = ++articleRequest;
-    articlesStatus.textContent = "正在读取文章…";
-    articleDetail.hidden = true;
+    articleDetailStatus.textContent = "正在读取文章…";
+    articleContent.hidden = true;
+    articleDetail.querySelector(".panel-body").scrollTop = 0;
     try {
       const article = await requestJson("article?id=" + encodeURIComponent(id));
-      if (request !== articleRequest || !articlesDialog.open) return;
+      if (request !== articleRequest || currentPanel() !== articleDetail) return;
       document.querySelector("#article-title").textContent = article.title;
       document.querySelector("#article-meta").textContent = articleMeta(article);
       document.querySelector("#article-body").textContent = article.body;
@@ -915,22 +1137,23 @@ if (isWizard) {
           articleLink.hidden = false;
         }
       }
-      articleDetail.hidden = false;
-      articlesStatus.textContent = "";
-      articleDetail.scrollIntoView({block: "nearest"});
+      articleContent.hidden = false;
+      articleDetailStatus.textContent = "";
     } catch (error) {
-      if (request === articleRequest) articlesStatus.textContent = error.message;
+      if (request === articleRequest) {
+        articleDetailStatus.textContent = error.message;
+        articleRetry.hidden = false;
+      }
     }
   }
 
   async function loadArticles() {
     const request = ++articleRequest;
     articlesStatus.textContent = "正在查找文章…";
-    articleDetail.hidden = true;
-    articlesList.replaceChildren();
     try {
       const {articles} = await requestJson("articles?q=" + encodeURIComponent(articlesQuery.value.trim()));
-      if (request !== articleRequest || !articlesDialog.open) return;
+      if (request !== articleRequest || currentPanel() !== articlesDialog) return;
+      articlesList.replaceChildren();
       for (const article of articles) {
         const item = document.createElement("li");
         const button = document.createElement("button");
@@ -947,7 +1170,7 @@ if (isWizard) {
         }
         item.append(button);
         articlesList.append(item);
-        button.addEventListener("click", () => openArticle(article.id));
+        button.addEventListener("click", () => openArticle(article.id, button));
       }
       articlesStatus.textContent = articles.length ? "" : "没有找到匹配的公开文章。";
     } catch (error) {
@@ -955,15 +1178,16 @@ if (isWizard) {
     }
   }
 
-  document.querySelector("#articles-button").addEventListener("click", () => {
-    articlesDialog.showModal();
-    loadArticles();
+  articlesButton.addEventListener("click", () => {
+    if (showPanel(articlesDialog, articlesButton) && !articlesList.children.length) loadArticles();
   });
   articlesForm.addEventListener("submit", event => {
     event.preventDefault();
     loadArticles();
   });
-  articlesDialog.addEventListener("close", () => { articleRequest += 1; });
+  for (const view of [articlesDialog, articleDetail]) {
+    view.addEventListener("panel-leave", () => { articleRequest += 1; });
+  }
 
   const tagsDialog = document.querySelector("#tags-dialog");
   const tagsForm = document.querySelector("#tags-form");
@@ -1041,29 +1265,34 @@ if (isWizard) {
       tagsConfirm.textContent = `确认写入 ${changedCount} 篇`;
       tagsActions.hidden = false;
     }
-    if (tagsDialog.open) tagsStatus.focus();
   }
 
-  openTagPreview = proposal => {
+  openTagPreview = (proposal, trigger) => {
     if (tagsBusy) return;
-    if (!tagsDialog.open) tagsDialog.showModal();
+    if (currentPanel() !== tagsDialog && !showPanel(tagsDialog, trigger)) return;
     acceptTagPreview(proposal);
   };
-  document.querySelector("#tags-button").addEventListener("click", () => tagsDialog.showModal());
-  tagsForm.addEventListener("input", clearTagsPreview);
+  document.querySelector("#tags-button").addEventListener("click", event => showPanel(tagsDialog, event.currentTarget));
+  function invalidateTagPreview() {
+    if (!tagsProposalId && !tagsChanges.children.length && !tagsUnchangedList.children.length) return;
+    tagsProposalId = null;
+    tagsActions.hidden = true;
+    tagsStatus.textContent = "下方为上一次的结果，请按新条件生成预览后再写入。";
+  }
+
+  tagsForm.addEventListener("input", invalidateTagPreview);
   tagsForm.addEventListener("submit", async event => {
     event.preventDefault();
     if (tagsBusy) return;
     const input = {query: tagsQuery.value.trim(), limit: tagsLimit.valueAsNumber};
     if (tagsCategories.value.trim()) input.categories = tagsCategories.value.trim();
-    clearTagsPreview();
+    invalidateTagPreview();
     setTagsBusy(true);
     tagsStatus.textContent = "正在分析文章并生成标签建议…";
     try {
       acceptTagPreview(await requestJson("tags/preview", input));
     } catch (error) {
-      clearTagsPreview();
-      tagsStatus.textContent = error.message;
+      tagsStatus.textContent = error.message + "。请重新生成预览。";
     } finally {
       setTagsBusy(false);
     }
@@ -1086,6 +1315,7 @@ if (isWizard) {
 
   const frontierDialog = document.querySelector("#frontier-dialog");
   const frontierStatus = document.querySelector("#frontier-status");
+  const frontierToolStatus = document.querySelector("#frontier-tool-status");
   const frontierStart = document.querySelector("#frontier-start");
   const frontierRefresh = document.querySelector("#frontier-refresh");
   const frontierDownload = document.querySelector("#frontier-download");
@@ -1100,7 +1330,14 @@ if (isWizard) {
     // The current tab still displays the result when session storage is unavailable.
   }
 
+  function setFrontierToolStatus(message) {
+    frontierToolStatus.hidden = !message;
+    frontierToolStatus.textContent = message;
+  }
+
   function showFrontierRun(run) {
+    setFrontierToolStatus(run.status === "done" ? "草稿已生成"
+      : run.status === "failed" ? "试跑失败" : "试跑中");
     frontierStart.disabled = run.status === "running";
     frontierDownload.hidden = run.status !== "done";
     frontierPublish.hidden = run.status !== "done";
@@ -1113,7 +1350,7 @@ if (isWizard) {
     } else {
       const message = "正在抓取来源、生成并核验草稿…";
       if (frontierStatus.textContent !== message) frontierStatus.textContent = message;
-      if (frontierDialog.open) frontierTimer = setTimeout(refreshFrontier, 2200);
+      frontierTimer = setTimeout(refreshFrontier, 2200);
     }
   }
 
@@ -1126,6 +1363,7 @@ if (isWizard) {
       showFrontierRun(await requestJson("frontier/run?id=" + encodeURIComponent(frontierRun)));
     } catch (error) {
       frontierStatus.textContent = error.message;
+      setFrontierToolStatus("状态读取失败");
       frontierStart.disabled = false;
       frontierRefresh.hidden = false;
     } finally {
@@ -1135,18 +1373,17 @@ if (isWizard) {
   }
 
   document.querySelector("#frontier-button").addEventListener("click", () => {
-    frontierDialog.showModal();
-    refreshFrontier();
+    if (showPanel(frontierDialog, document.querySelector("#frontier-button"))) refreshFrontier();
   });
-  frontierDialog.addEventListener("close", () => clearTimeout(frontierTimer));
   frontierRefresh.addEventListener("click", refreshFrontier);
-  frontierPublish.addEventListener("click", () => openPublicationPreview("frontier", frontierRun));
+  frontierPublish.addEventListener("click", () => openPublicationPreview("frontier", frontierRun, frontierPublish));
   frontierStart.addEventListener("click", async () => {
     if (frontierBusy) return;
     clearTimeout(frontierTimer);
     frontierBusy = frontierStart.disabled = true;
     frontierRefresh.hidden = frontierDownload.hidden = frontierPublish.hidden = true;
     frontierStatus.textContent = "正在启动试跑…";
+    setFrontierToolStatus("正在启动…");
     try {
       const run = await requestJson("frontier/start", {});
       frontierRun = run.id;
@@ -1158,10 +1395,25 @@ if (isWizard) {
       showFrontierRun(run);
     } catch (error) {
       frontierStatus.textContent = error.message;
+      setFrontierToolStatus("试跑启动失败");
       frontierStart.disabled = false;
       frontierRefresh.hidden = !frontierRun;
     } finally {
       frontierBusy = false;
     }
   });
+  if (frontierRun) refreshFrontier();
+}
+
+for (const link of document.querySelectorAll("[data-ops-link]")) {
+  const url = new URL(link.href);
+  url.searchParams.set("persona", persona);
+  link.href = url.href;
+}
+
+const entryUrl = new URL(location.href);
+if (entryUrl.searchParams.get("panel") === "tools") {
+  entryUrl.searchParams.delete("panel");
+  history.replaceState(null, "", entryUrl);
+  showPanel(toolsDialog, toolsButton);
 }

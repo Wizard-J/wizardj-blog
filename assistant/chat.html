@@ -32,7 +32,7 @@
       <button class="new-chat" id="clear" type="button" aria-label="新建对话"><span aria-hidden="true">＋</span> 新建</button>
     </div>
   </header>
-  <main class="scroll-area" id="scroll-area">
+  <main class="scroll-area" id="scroll-area" tabindex="-1">
     <div class="column">
       <section id="welcome" class="welcome">
         <img src="/assistant/munger.jpeg" alt="" width="44" height="44">
@@ -46,207 +46,233 @@
     </div>
   </main>
   <footer class="composer">
+    <button class="toolbar-button" id="latest-chat" type="button" hidden>回到最新</button>
     <form id="chat-form">
       <div class="input-bar">
         <label for="question" class="sr-only">你想分析什么问题？</label>
         <textarea id="question" maxlength="4000" rows="2" required placeholder="说说你想分析的问题…"></textarea>
+        <button class="toolbar-button" id="stop-chat" type="button" hidden>停止接收</button>
         <button class="send" type="submit" aria-label="发送" title="发送">➤</button>
       </div>
       <p class="keyboard-hint">Enter 发送，Shift + Enter 换行</p>
     </form>
   </footer>
-  <dialog class="tool-dialog panel-drawer" id="tools-dialog" aria-labelledby="tools-title">
-    <header class="dialog-header">
-      <h2 id="tools-title">工具</h2>
-      <form method="dialog"><button class="toolbar-button panel-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <section class="tool-group" aria-labelledby="article-tools-title">
-        <h3 id="article-tools-title">文章</h3>
-        <button class="toolbar-button" id="draft-button" type="button" aria-haspopup="dialog">Hugo 草稿</button>
-        <button class="toolbar-button" id="articles-button" type="button" aria-haspopup="dialog" data-wizard-only hidden>站内文章</button>
-        <button class="toolbar-button" id="tags-button" type="button" aria-haspopup="dialog" data-wizard-only hidden>批量打标</button>
-        <button class="toolbar-button" id="frontier-button" type="button" aria-haspopup="dialog" data-wizard-only hidden>前沿站试跑</button>
-      </section>
-      <section class="tool-group" aria-labelledby="assistant-tools-title">
-        <h3 id="assistant-tools-title">助手设置</h3>
-        <button class="toolbar-button" id="context-button" type="button" aria-haspopup="dialog">上下文</button>
-        <button class="toolbar-button" id="memory-button" type="button" aria-haspopup="dialog">记忆</button>
-      </section>
-      <section class="tool-group" aria-labelledby="bot-tools-title">
-        <h3 id="bot-tools-title">机器人</h3>
-        <a class="toolbar-button" href="/assistant/weixin/">微信机器人</a>
-      </section>
-      <section class="tool-group" aria-labelledby="network-tools-title">
-        <h3 id="network-tools-title">网络</h3>
-        <a class="toolbar-button" href="/assistant/cf-select/">优选节点</a>
-      </section>
-      <p class="tool-group"><a href="/">返回博客</a></p>
-    </div>
-  </dialog>
-  <dialog class="tool-dialog panel-drawer" id="history-dialog" aria-labelledby="history-title">
-    <header class="dialog-header">
-      <h2 id="history-title">历史记录</h2>
-      <form method="dialog"><button class="toolbar-button panel-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <p class="dialog-status" id="history-status" role="status"></p>
-      <ul class="session-list" id="session-list"></ul>
-    </div>
-  </dialog>
-  <dialog class="tool-dialog panel-drawer" id="context-dialog" aria-labelledby="context-title">
-    <header class="dialog-header">
-      <h2 id="context-title">上下文 · AGENTS.md</h2>
-      <form method="dialog"><button class="toolbar-button panel-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <form class="context-form" id="context-form">
-        <p class="context-hint" id="context-hint">保存后，新消息会使用这份上下文。导出下载的是已保存的版本。</p>
-        <label class="sr-only" for="context-content">上下文正文</label>
-        <textarea id="context-content" rows="10" spellcheck="false" aria-describedby="context-hint" placeholder="写入 Markdown，或从文件导入…"></textarea>
-        <input type="file" id="context-file" accept=".md,.markdown,text/markdown,text/plain" hidden>
-        <div class="dialog-actions">
-          <button class="toolbar-button" id="context-import" type="button">导入文件</button>
-          <a class="toolbar-button" id="context-export" href="/assistant/api/context/download" download="AGENTS.md">导出 AGENTS.md</a>
-          <button class="new-chat" id="context-save" type="submit">保存上下文</button>
-        </div>
-        <p class="dialog-status" id="context-status" role="status"></p>
-      </form>
-    </div>
-  </dialog>
-  <dialog class="tool-dialog panel-drawer" id="memory-dialog" aria-labelledby="memory-title">
-    <header class="dialog-header">
-      <h2 id="memory-title">长期记忆</h2>
-      <form method="dialog"><button class="toolbar-button panel-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <p class="context-hint">从已保存的对话提取长期偏好和事实，每条保留你的原话。</p>
-      <p class="dialog-status" id="memory-status" role="status"></p>
-      <ul class="memory-list" id="memory-list"></ul>
-      <div class="dialog-actions">
-        <button class="toolbar-button" id="memory-refresh" type="button">提炼待处理对话</button>
-        <button class="toolbar-button" id="memory-more" type="button" hidden>加载更多</button>
+  <dialog class="tool-dialog panel-drawer" id="assistant-panel">
+    <section class="panel-view" id="tools-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="tools-title">工具</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <section class="tool-group" aria-labelledby="article-tools-title">
+          <h3 id="article-tools-title">文章</h3>
+          <button class="toolbar-button" id="draft-button" type="button">Hugo 草稿</button>
+          <button class="toolbar-button" id="articles-button" type="button" data-wizard-only hidden>站内文章</button>
+          <button class="toolbar-button" id="tags-button" type="button" data-wizard-only hidden>批量打标</button>
+          <button class="toolbar-button" id="frontier-button" type="button" data-wizard-only hidden>前沿站试跑</button>
+          <p class="dialog-status" id="frontier-tool-status" hidden></p>
+        </section>
+        <section class="tool-group" aria-labelledby="assistant-tools-title">
+          <h3 id="assistant-tools-title">助手设置</h3>
+          <button class="toolbar-button" id="context-button" type="button">上下文</button>
+          <button class="toolbar-button" id="memory-button" type="button">记忆</button>
+        </section>
+        <section class="tool-group" aria-labelledby="bot-tools-title">
+          <h3 id="bot-tools-title">机器人</h3>
+          <a class="toolbar-button" href="/assistant/weixin/" data-ops-link>微信机器人</a>
+        </section>
+        <section class="tool-group" aria-labelledby="network-tools-title">
+          <h3 id="network-tools-title">网络</h3>
+          <a class="toolbar-button" href="/assistant/cf-select/" data-ops-link>优选节点</a>
+        </section>
+        <p class="tool-group"><a href="/">返回博客</a></p>
       </div>
-    </div>
-  </dialog>
-  <dialog class="tool-dialog panel-drawer" id="draft-dialog" aria-labelledby="draft-heading">
-    <header class="dialog-header">
-      <h2 id="draft-heading">Hugo 草稿</h2>
-      <form method="dialog"><button class="toolbar-button panel-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <form class="context-form" id="draft-form">
-        <label for="draft-instruction">想把当前对话整理成怎样的文章？</label>
-        <textarea id="draft-instruction" maxlength="2000" rows="3" required></textarea>
-        <div class="dialog-actions"><button class="new-chat" id="draft-propose" type="submit">生成预览</button></div>
-      </form>
-      <section id="draft-preview" hidden aria-labelledby="draft-title">
-        <h3 id="draft-title"></h3>
-        <pre id="draft-body"></pre>
-        <div class="dialog-actions">
-          <button id="draft-confirm" class="new-chat" type="button">确认保存私有草稿</button>
-          <a class="toolbar-button" id="draft-download" hidden>下载 Markdown</a>
-          <button class="toolbar-button" id="draft-publish-preview" type="button" aria-haspopup="dialog" hidden>预览发布</button>
-        </div>
-      </section>
-      <p class="dialog-status" id="draft-status" role="status"></p>
-      <section id="saved-drafts" hidden>
-        <h3>已保存草稿</h3>
-        <ul class="session-list" id="saved-draft-list"></ul>
-      </section>
-    </div>
-  </dialog>
-  <dialog class="tool-dialog panel-drawer" id="articles-dialog" aria-labelledby="articles-heading">
-    <header class="dialog-header">
-      <h2 id="articles-heading">站内文章</h2>
-      <form method="dialog"><button class="toolbar-button panel-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <form class="article-search" id="articles-form">
-        <label class="sr-only" for="articles-query">搜索标题、标签或正文</label>
-        <input class="toolbar-button" id="articles-query" type="search" maxlength="200" placeholder="搜索标题、标签或正文">
-        <button class="toolbar-button" type="submit">搜索</button>
-      </form>
-      <p class="dialog-status" id="articles-status" role="status"></p>
-      <ul class="session-list" id="articles-list"></ul>
-      <section id="article-detail" hidden aria-labelledby="article-title">
-        <h3 id="article-title"></h3>
-        <p class="context-hint" id="article-meta"></p>
-        <a class="toolbar-button" id="public-article" target="_blank" rel="noopener noreferrer" hidden>打开公开原文</a>
-        <pre class="article-body" id="article-body" tabindex="0" aria-label="文章正文"></pre>
-      </section>
-    </div>
-  </dialog>
-  <dialog class="tool-dialog panel-drawer" id="tags-dialog" aria-labelledby="tags-heading">
-    <header class="dialog-header">
-      <h2 id="tags-heading">批量打标</h2>
-      <form method="dialog"><button class="toolbar-button panel-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <form id="tags-form" class="tag-filters">
-        <label for="tags-query">文章关键词
-          <input class="toolbar-button" id="tags-query" type="search" maxlength="140" placeholder="留空则选取最近文章">
-        </label>
-        <label for="tags-limit">文章数量
-          <input class="toolbar-button" id="tags-limit" type="number" min="1" max="10" value="5" required>
-        </label>
-        <label for="tags-categories">指定分类（可选）
-          <input class="toolbar-button" id="tags-categories" type="text" maxlength="160" placeholder="多个分类用逗号隔开">
-        </label>
-        <button class="new-chat" id="tags-preview" type="submit">生成预览</button>
-      </form>
-      <p class="dialog-status" id="tags-status" role="status" tabindex="-1"></p>
-      <ol class="session-list" id="tags-changes"></ol>
-      <details id="tags-unchanged" hidden>
-        <summary id="tags-unchanged-summary"></summary>
-        <ol class="session-list" id="tags-unchanged-list"></ol>
-      </details>
-    </div>
-    <div class="dialog-actions panel-footer" id="tags-actions" hidden>
-      <button class="new-chat" id="tags-confirm" type="button">确认写入</button>
-      <span class="context-hint">仅更新 Hugo 源文件，需另行发布。</span>
-    </div>
-  </dialog>
-  <dialog class="tool-dialog" id="frontier-dialog" aria-labelledby="frontier-heading">
-    <header class="dialog-header">
-      <h2 id="frontier-heading">巫师前沿站</h2>
-      <form method="dialog"><button class="toolbar-button panel-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <p class="context-hint">手动抓取新来源并生成一篇私有草稿。</p>
-      <p class="dialog-status" id="frontier-status" role="status"></p>
-      <div class="dialog-actions">
-        <button class="new-chat" id="frontier-start" type="button">试跑一篇草稿</button>
-        <button class="toolbar-button" id="frontier-refresh" type="button" hidden>查看试跑状态</button>
-        <a class="toolbar-button" id="frontier-download" hidden>下载 Markdown</a>
-        <button class="toolbar-button" id="frontier-publish-preview" type="button" aria-haspopup="dialog" hidden>预览发布</button>
+    </section>
+    <section class="panel-view" id="history-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="history-title">历史记录</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <p class="dialog-status" id="history-status" role="status"></p>
+        <ul class="session-list" id="session-list"></ul>
       </div>
-    </div>
-  </dialog>
-  <dialog class="tool-dialog panel-drawer" id="publish-dialog" aria-labelledby="publish-heading">
-    <header class="dialog-header">
-      <h2 id="publish-heading">发布预览</h2>
-      <form method="dialog"><button class="toolbar-button panel-close" id="publish-close">关闭</button></form>
-    </header>
-    <div class="panel-body">
-      <p class="dialog-status" id="publish-status" role="status"></p>
-      <article id="publication-preview" aria-labelledby="publication-title" hidden>
-        <h3 id="publication-title" tabindex="-1"></h3>
-        <p class="context-hint" id="publication-tags" hidden></p>
-        <p class="context-hint" id="publication-image-note" hidden>可在 Markdown 原文中核对图片地址。</p>
-        <div id="publication-body" class="message-content"></div>
-        <details id="publication-source">
-          <summary>查看 Markdown 原文</summary>
-          <pre id="publication-markdown"></pre>
+    </section>
+    <section class="panel-view" id="context-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="context-title">上下文 · AGENTS.md</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <form class="context-form" id="context-form">
+          <p class="context-hint" id="context-hint">保存后，新消息会使用这份上下文。导出下载的是已保存的版本。</p>
+          <label class="sr-only" for="context-content">上下文正文</label>
+          <textarea id="context-content" rows="10" spellcheck="false" aria-describedby="context-hint" placeholder="写入 Markdown，或从文件导入…"></textarea>
+          <input type="file" id="context-file" accept=".md,.markdown,text/markdown,text/plain" hidden>
+          <div class="dialog-actions">
+            <button class="toolbar-button" id="context-import" type="button">导入文件</button>
+            <a class="toolbar-button" id="context-export" href="/assistant/api/context/download" download="AGENTS.md">导出 AGENTS.md</a>
+            <button class="new-chat" id="context-save" type="submit">保存上下文</button>
+          </div>
+          <p class="dialog-status" id="context-status" role="status"></p>
+          <button class="toolbar-button" id="context-retry" type="button" hidden>重新读取上下文</button>
+        </form>
+      </div>
+    </section>
+    <section class="panel-view" id="memory-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="memory-title">长期记忆</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <p class="context-hint">从已保存的对话提取长期偏好和事实，每条保留你的原话。</p>
+        <p class="dialog-status" id="memory-status" role="status"></p>
+        <ul class="memory-list" id="memory-list"></ul>
+        <div class="dialog-actions">
+          <button class="toolbar-button" id="memory-refresh" type="button">提炼待处理对话</button>
+          <button class="toolbar-button" id="memory-more" type="button" hidden>加载更多</button>
+        </div>
+      </div>
+    </section>
+    <section class="panel-view" id="draft-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="draft-heading">Hugo 草稿</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <form class="context-form" id="draft-form">
+          <label for="draft-instruction">想把当前对话整理成怎样的文章？</label>
+          <textarea id="draft-instruction" maxlength="2000" rows="3" required></textarea>
+          <div class="dialog-actions"><button class="new-chat" id="draft-propose" type="submit">生成预览</button></div>
+        </form>
+        <section id="draft-preview" hidden aria-labelledby="draft-title">
+          <h3 id="draft-title"></h3>
+          <pre id="draft-body"></pre>
+          <div class="dialog-actions">
+            <button id="draft-confirm" class="new-chat" type="button">确认保存私有草稿</button>
+            <a class="toolbar-button" id="draft-download" hidden>下载 Markdown</a>
+            <button class="toolbar-button" id="draft-publish-preview" type="button" hidden>预览发布</button>
+          </div>
+        </section>
+        <p class="dialog-status" id="draft-status" role="status"></p>
+        <section id="saved-drafts" hidden>
+          <h3>已保存草稿</h3>
+          <ul class="session-list" id="saved-draft-list"></ul>
+        </section>
+      </div>
+    </section>
+    <section class="panel-view" id="articles-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="articles-heading">站内文章</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <form class="article-search" id="articles-form">
+          <label class="sr-only" for="articles-query">搜索标题、标签或正文</label>
+          <input class="toolbar-button" id="articles-query" type="search" maxlength="200" placeholder="搜索标题、标签或正文">
+          <button class="toolbar-button" type="submit">搜索</button>
+        </form>
+        <p class="dialog-status" id="articles-status" role="status"></p>
+        <ul class="session-list" id="articles-list"></ul>
+      </div>
+    </section>
+    <section id="article-detail" class="panel-view" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button">‹ 返回</button>
+        <h2 id="article-detail-heading">文章详情</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <p class="dialog-status" id="article-detail-status" role="status"></p>
+        <button class="toolbar-button" id="article-retry" type="button" hidden>重新读取文章</button>
+        <div id="article-content" hidden>
+          <h3 id="article-title"></h3>
+          <p class="context-hint" id="article-meta"></p>
+          <a class="toolbar-button" id="public-article" target="_blank" rel="noopener noreferrer" hidden>打开公开原文</a>
+          <pre class="article-body" id="article-body" aria-label="文章正文"></pre>
+        </div>
+      </div>
+    </section>
+    <section class="panel-view" id="tags-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="tags-heading">批量打标</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <form id="tags-form" class="tag-filters">
+          <label for="tags-query">文章关键词
+            <input class="toolbar-button" id="tags-query" type="search" maxlength="140" placeholder="留空则选取最近文章">
+          </label>
+          <label for="tags-limit">文章数量
+            <input class="toolbar-button" id="tags-limit" type="number" min="1" max="10" value="5" required>
+          </label>
+          <label for="tags-categories">指定分类（可选）
+            <input class="toolbar-button" id="tags-categories" type="text" maxlength="160" placeholder="多个分类用逗号隔开">
+          </label>
+          <button class="new-chat" id="tags-preview" type="submit">生成预览</button>
+        </form>
+        <p class="dialog-status" id="tags-status" role="status" tabindex="-1"></p>
+        <ol class="session-list" id="tags-changes"></ol>
+        <details id="tags-unchanged" hidden>
+          <summary id="tags-unchanged-summary"></summary>
+          <ol class="session-list" id="tags-unchanged-list"></ol>
         </details>
-      </article>
-    </div>
-    <div class="dialog-actions panel-footer" id="publish-actions" hidden>
-      <button class="new-chat" id="publish-confirm" type="button" hidden>发布到博客</button>
-      <button class="toolbar-button" id="publish-refresh" type="button" hidden>重新读取预览</button>
-      <a class="toolbar-button" id="publish-link" target="_blank" rel="noopener noreferrer" hidden>打开已发布文章</a>
-      <span class="context-hint" id="publish-hint" hidden>确认后，文章会在公开博客上可见。</span>
-    </div>
+      </div>
+      <div class="dialog-actions panel-footer" id="tags-actions" hidden>
+        <button class="new-chat" id="tags-confirm" type="button">确认写入</button>
+        <span class="context-hint">仅更新 Hugo 源文件，需另行发布。</span>
+      </div>
+    </section>
+    <section class="panel-view" id="frontier-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="frontier-heading">巫师前沿站</h2>
+        <button class="toolbar-button panel-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <p class="context-hint">手动抓取新来源并生成一篇私有草稿。</p>
+        <p class="dialog-status" id="frontier-status" role="status"></p>
+        <div class="dialog-actions">
+          <button class="new-chat" id="frontier-start" type="button">试跑一篇草稿</button>
+          <button class="toolbar-button" id="frontier-refresh" type="button" hidden>查看试跑状态</button>
+          <a class="toolbar-button" id="frontier-download" hidden>下载 Markdown</a>
+          <button class="toolbar-button" id="frontier-publish-preview" type="button" hidden>预览发布</button>
+        </div>
+      </div>
+    </section>
+    <section class="panel-view" id="publish-dialog" hidden>
+      <header class="dialog-header">
+        <button class="toolbar-button panel-back" type="button" hidden>‹ 返回</button>
+        <h2 id="publish-heading">发布预览</h2>
+        <button class="toolbar-button panel-close" id="publish-close" type="button">关闭</button>
+      </header>
+      <div class="panel-body">
+        <p class="dialog-status" id="publish-status" role="status"></p>
+        <article id="publication-preview" aria-labelledby="publication-title" hidden>
+          <h3 id="publication-title" tabindex="-1"></h3>
+          <p class="context-hint" id="publication-tags" hidden></p>
+          <p class="context-hint" id="publication-image-note" hidden>可在 Markdown 原文中核对图片地址。</p>
+          <div id="publication-body" class="message-content"></div>
+          <details id="publication-source">
+            <summary>查看 Markdown 原文</summary>
+            <pre id="publication-markdown"></pre>
+          </details>
+        </article>
+      </div>
+      <div class="dialog-actions panel-footer" id="publish-actions" hidden>
+        <button class="new-chat" id="publish-confirm" type="button" hidden>发布到博客</button>
+        <button class="toolbar-button" id="publish-refresh" type="button" hidden>重新读取预览</button>
+        <a class="toolbar-button" id="publish-link" target="_blank" rel="noopener noreferrer" hidden>打开已发布文章</a>
+        <span class="context-hint" id="publish-hint" hidden>确认后，文章会在公开博客上可见。</span>
+      </div>
+    </section>
   </dialog>
 </body>
 </html>
