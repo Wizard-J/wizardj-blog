@@ -22,4 +22,4 @@
 
 优选状态采集器优先读取 `/var/lib/home-weixin-status/cf-run-result.json` 的 v1 结果，校验本轮启动时间和字段，只接受来源计数、总数、延迟和发布布尔值。现有优选任务仍可使用日志，缺失、过期或格式错误的结果文件会回退到本轮日志。
 
-外部生产者可从 `assistant/ops/cf_status.py` 调用 `write_result(started, summary)`。传入与 systemd `ExecMainStartTimestamp` 一致的 Unix 秒。字段定义见该模块和测试。公开订阅通过 HTTPS 字节校验后方可将 `published` 设为 true。生产者无需把订阅地址、节点 IP 或原始日志写入结果文件。发布端尚未接入此函数时，继续使用日志兼容路径。
+外部生产者可从 `assistant/ops/cf_status.py` 调用 `write_result(started, summary)`。传入与 systemd `ExecMainStartTimestamp` 一致的 Unix 秒。字段定义见该模块和测试。公开订阅通过 HTTPS 字节校验后方可将 `published` 设为 true。生产者无需把订阅地址、节点 IP 或原始日志写入结果文件。发布端尚未接入此函数时，继续使用日志兼容路径。现有线上优选任务的接入补丁及安装步骤见 [优选任务结构化结果](cf-select/README.md)。

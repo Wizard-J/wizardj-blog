@@ -1,0 +1,57 @@
+--- a/cf_select.py
++++ b/cf_select.py
+@@ -18,4 +18,6 @@
+ import time
+ 
++from cf_result import record
++
+ BIN = '/opt/wizardj-egress/mihomo'
+ ETC = Path('/etc/wizardj-egress')
+@@ -246,9 +248,17 @@
+     ranked, drops, cutoff = rank_nodes(results)
+     passed = {row[0] for row in ranked}
++    summary = {
++        "sources": {}, "selected": None, "published": False,
++        "totals": {"tested": len(candidates), "passed": len(ranked),
++                   "cutoff_ms": round(cutoff * 1000), **drops},
++    }
+     for source in ('current', 'dns', 'template', 'official_sample'):
+         ips = {ip for ip, origin in candidates.items() if origin == source}
++        summary["sources"][source] = {"tested": len(ips), "passed": len(ips & passed)}
+         print(f'candidate_source={source} tested={len(ips)} passed={len(ips & passed)}', flush=True)
+     print(f'tested={len(candidates)} passed={len(ranked)} client_worst_cutoff_ms={cutoff*1000:.0f} '
+           + ' '.join(f'rejected_{k}={v}' for k, v in drops.items()), flush=True)
++    if apply:
++        record(summary)
+     if not ranked:
+         print('no stable candidates; active proxy and subscription unchanged', flush=True)
+@@ -259,4 +269,14 @@
+     print(f'nodes_selected={len(winners)} openai_median_ms={latency_range(1)} '
+           f'client_median_ms={latency_range(2)} client_worst_ms={max(row[4] for row in selected)*1000:.0f}', flush=True)
++    summary["selected"] = {
++        "count": len(winners),
++        "openai_min": round(min(row[1] for row in selected) * 1000),
++        "openai_max": round(max(row[1] for row in selected) * 1000),
++        "client_min": round(min(row[2] for row in selected) * 1000),
++        "client_max": round(max(row[2] for row in selected) * 1000),
++        "client_worst": round(max(row[4] for row in selected) * 1000),
++    }
++    if apply:
++        record(summary)
+     new_profile, published_profile = profiles(live, original, winners)
+     new, published = encode(new_profile), encode(published_profile)
+--- a/subscription_publish.py
++++ b/subscription_publish.py
+@@ -7,4 +7,6 @@
+ import subprocess
+ import time
++
++from cf_result import confirm_publication
+ from pathlib import Path
+ 
+@@ -52,4 +54,5 @@
+     result = rpc('publish', payload)
+     if result['sha256'] == expected and verify(name, expected):
++        confirm_publication()
+         print('subscription published and public HTTPS bytes verified', flush=True)
+         return
