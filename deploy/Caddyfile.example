@@ -4,6 +4,12 @@
 		basicauth {
 			{$BLOG_ADMIN_USER} {$BLOG_ADMIN_HASH}
 		}
+		@cf_control path /assistant/cf-select/operation.json /assistant/cf-select/test /assistant/cf-select/publish/*
+		handle @cf_control {
+			reverse_proxy unix//run/wizardj-cf-control/control.sock {
+				header_up -Authorization
+			}
+		}
 		@ops path /assistant/weixin/* /assistant/cf-select/*
 		handle @ops {
 			reverse_proxy 127.0.0.1:18767 {

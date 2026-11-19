@@ -1,0 +1,4 @@
+[Service]
+ExecStart=
+ExecStart=/usr/bin/python3 /opt/wizardj-egress/cf_workflow.py scheduled
+ExecStartPost=

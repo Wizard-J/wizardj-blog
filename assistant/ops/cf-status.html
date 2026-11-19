@@ -13,13 +13,18 @@
   <main class="bot-status">
     <div class="status-heading">
       <h1>优选节点</h1>
-      <button class="toolbar-button" id="refresh" type="button">刷新</button>
+      <div class="header-actions">
+        <button class="toolbar-button" id="refresh" type="button">刷新</button>
+        <button class="toolbar-button" id="test" type="button" disabled>立即测速</button>
+        <button class="toolbar-button" id="publish" type="button" disabled>发布本轮结果</button>
+      </div>
     </div>
     <p id="notice" role="status">正在读取状态…</p>
+    <p id="operation" class="status-note" role="status"></p>
     <dl class="status-grid">
       <div><dt>最近一轮</dt><dd id="run">—</dd></div>
       <div><dt>下次计划运行</dt><dd id="next">—</dd></div>
-      <div><dt>订阅发布</dt><dd id="publish">—</dd></div>
+      <div><dt>订阅发布</dt><dd id="published">—</dd></div>
       <div><dt>候选通过 / 测试</dt><dd id="totals">—</dd></div>
       <div><dt>入选节点</dt><dd id="selected">—</dd></div>
       <div><dt>客户端测速中位数</dt><dd id="latency">—</dd></div>

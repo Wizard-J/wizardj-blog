@@ -1,0 +1,11 @@
+[Unit]
+Description=WizardJ node selection publish
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/wizardj-egress/cf_workflow.py publish %i
+TimeoutStartSec=360
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/wizardj-egress /var/lib/home-weixin-status

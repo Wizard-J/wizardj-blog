@@ -7,7 +7,7 @@ from tempfile import NamedTemporaryFile
 UNIT = "wizardj-cf-select.service"
 TIMER = "wizardj-cf-select.timer"
 
-SOURCES = {"current", "dns", "template", "official_sample"}
+SOURCES = {"current", "historical", "dns", "template", "official_sample"}
 RESULT_FILE = Path("/var/lib/home-weixin-status/cf-run-result.json")
 TOTAL_FIELDS = ("tested", "passed", "cutoff_ms", "connectivity", "jitter", "slow", "relative")
 SELECTED_FIELDS = ("count", "openai_min", "openai_max", "client_min", "client_max", "client_worst")

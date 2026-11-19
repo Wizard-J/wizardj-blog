@@ -1,0 +1,123 @@
+--- a/cf_select.py
++++ b/cf_select.py
+@@ -19,4 +19,5 @@
+ 
+ from cf_result import record
++from cf_policy import choose, history_candidates, update_history
+ 
+ BIN = '/opt/wizardj-egress/mihomo'
+@@ -60,5 +61,5 @@
+ 
+ 
+-def addresses(config, profile):
++def addresses(config, profile, historical=()):
+     body = subprocess.check_output([CURL, '--noproxy', '*', '--proto', '=https', '-fsS',
+                                     '--max-time', '12', '--max-filesize', '65536', OFFICIAL],
+@@ -72,5 +73,5 @@
+     seeds = [n['server'] for n in profile['proxies'][:8]]
+     candidates = {}
+-    for source, values in (('current', current), ('dns', dns), ('template', seeds)):
++    for source, values in (('current', current), ('historical', historical), ('dns', dns), ('template', seeds)):
+         for raw in values:
+             try:
+@@ -164,5 +165,5 @@
+ 
+ 
+-def rank_nodes(results):
++def rank_nodes(results, *, absolute=False):
+     stable = []
+     drops = dict(connectivity=0, jitter=0, slow=0, relative=0)
+@@ -188,4 +189,7 @@
+     # Prefer a reliable client-test response after both targets pass their gates.
+     ranked.sort(key=lambda row: (row[4], row[2], row[1], row[3], row[0]))
++    if absolute:
++        stable.sort(key=lambda row: (row[4], row[2], row[1], row[3], row[0]))
++        return stable
+     return ranked, drops, cutoff
+ 
+@@ -230,5 +234,5 @@
+ 
+ 
+-def run(apply):
++def run(apply, *, prepare=None):
+     raw = LIVE.read_bytes()
+     live, original = json.loads(raw), json.loads(PROFILE.read_bytes())
+@@ -238,5 +242,10 @@
+         raise ValueError('unexpected VLESS template')
+     user, group = pwd.getpwnam(USER), grp.getgrnam(USER)
+-    candidates = addresses(live, original)
++    history_path = ETC / 'node-history.json'
++    history = json.loads(history_path.read_bytes()) if history_path.is_file() else {}
++    previous_profile = json.loads(ARTIFACT.read_bytes()) if ARTIFACT.is_file() else live
++    previous = {node['server'] for node in previous_profile['proxies']}
++    known = [*previous, *history_candidates(history)]
++    candidates = addresses(live, original, known)
+     with ThreadPoolExecutor(max_workers=4) as executor:
+         results = list(executor.map(lambda ip: test_node(ip, tmpl, user.pw_uid, group.gr_gid), candidates))
+@@ -253,5 +262,8 @@
+                    "cutoff_ms": round(cutoff * 1000), **drops},
+     }
+-    for source in ('current', 'dns', 'template', 'official_sample'):
++    absolute = rank_nodes(results, absolute=True)
++    if apply or prepare:
++        replace(history_path, encode(update_history(history, absolute)), 0o600)
++    for source in ('current', 'historical', 'dns', 'template', 'official_sample'):
+         ips = {ip for ip, origin in candidates.items() if origin == source}
+         summary["sources"][source] = {"tested": len(ips), "passed": len(ips & passed)}
+@@ -261,8 +273,10 @@
+     if apply:
+         record(summary)
+-    if not ranked:
+-        print('no stable candidates; active proxy and subscription unchanged', flush=True)
++    selected = choose(ranked, absolute, previous, len(original['proxies']))
++    if not selected:
++        if prepare:
++            prepare(summary, None, None)
++        print('insufficient verified candidates; active proxy and subscription unchanged', flush=True)
+         return False
+-    selected = ranked[:min(8,len(original['proxies']))]
+     winners = [row[0] for row in selected]
+     latency_range = lambda column: f'{min(row[column] for row in selected)*1000:.0f}-{max(row[column] for row in selected)*1000:.0f}'
+@@ -288,15 +302,21 @@
+                                             if not rule.startswith(('GEOSITE,', 'GEOIP,'))])
+     check_config(encode(offline))
++    if prepare:
++        prepare(summary, new, published)
+     if not apply:
+         return True
+-    if [n['server'] for n in live['proxies']] != winners:
+-        replace(BACKUP, raw, 0o640, group.gr_gid)
++    return activate(raw, new, published, group.gr_gid)
++
++
++def activate(raw, new, published, gid):
++    if raw != new:
++        replace(BACKUP, raw, 0o640, gid)
+         try:
+-            replace(LIVE, new, 0o640, group.gr_gid)
++            replace(LIVE, new, 0o640, gid)
+             restart()
+             if not healthy():
+                 raise RuntimeError('new live proxy failed its smoke test')
+         except Exception:
+-            replace(LIVE, raw, 0o640, group.gr_gid)
++            replace(LIVE, raw, 0o640, gid)
+             restart()
+             print(f'reverted previous config; recovered={healthy()}', flush=True)
+--- a/subscription_publish.py
++++ b/subscription_publish.py
+@@ -46,5 +46,5 @@
+ 
+ 
+-def main():
++def main(*, record_receipt=True):
+     name = (ROOT/'publish-filename').read_text().strip()
+     if not re.fullmatch(r'[a-f0-9]{32}\.yaml', name):
+@@ -54,5 +54,6 @@
+     result = rpc('publish', payload)
+     if result['sha256'] == expected and verify(name, expected):
+-        confirm_publication()
++        if record_receipt:
++            confirm_publication()
+         print('subscription published and public HTTPS bytes verified', flush=True)
+         return
