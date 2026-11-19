@@ -1,0 +1,26 @@
+{$BLOG_DOMAIN} {
+	@assistant path /assistant /assistant/*
+	handle @assistant {
+		basicauth {
+			{$BLOG_ADMIN_USER} {$BLOG_ADMIN_HASH}
+		}
+		@ops path /assistant/weixin/* /assistant/cf-select/*
+		handle @ops {
+			reverse_proxy 127.0.0.1:18767 {
+				header_up -Authorization
+			}
+		}
+		handle {
+			reverse_proxy 127.0.0.1:18766 {
+				header_up -Authorization
+				header_up X-Wizardj-Internal {$WIZARDJ_INTERNAL_TOKEN}
+				flush_interval -1
+			}
+		}
+	}
+	handle {
+		root * /srv/wizardj.cn/current
+		encode gzip
+		file_server
+	}
+}

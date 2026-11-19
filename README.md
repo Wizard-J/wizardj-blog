@@ -30,6 +30,4 @@ python3 -m venv .venv
 
 `assistant/` 包含博客助手、文章和草稿工具，以及微信机器人只读状态页的源码。博客助手通过受保护的反向代理提供 `/assistant/`，启动前需配置 `WIZARDJ_INTERNAL_TOKEN_FILE`。使用 OpenAI API 时需在服务端配置 `WIZARDJ_OPENAI_API_KEY_FILE`，可通过 `WIZARDJ_OPENAI_PROJECT` 和 `WIZARDJ_MODEL` 指定项目和模型。远程发布另需配置 `WIZARDJ_PUBLISH_HOST` 及发布专用 SSH 凭据。
 
-微信机器人状态页由 `weixin_status.py` 提供。Linux 部署可定期使用 `--collect` 读取机器人服务和日志，生成只包含状态、时间和错误类别的快照。状态页面和 JSON 接口都应位于后台登录验证之后。
-
-优选节点页面位于 `/assistant/cf-select/`。运行 `weixin_status.py --collect-cf` 可从已有的 systemd 任务和日志生成只读快照。页面通过后台登录验证后展示最近一轮的统计和发布回执。
+微信机器人和优选节点的只读状态页位于 `assistant/ops/`。它们读取独立任务的状态，页面与 JSON 接口共用后台登录验证。线上启动入口、部署模板和恢复步骤见 [部署说明](deploy/README.md)。

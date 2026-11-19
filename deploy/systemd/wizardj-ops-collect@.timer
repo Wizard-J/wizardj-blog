@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh WizardJ %i status every 30 seconds
+
+[Timer]
+OnBootSec=5s
+OnUnitActiveSec=30s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

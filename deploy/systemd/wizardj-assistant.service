@@ -1,0 +1,16 @@
+[Unit]
+Description=WizardJ Blog assistant
+After=network.target
+
+[Service]
+User=wizardj-assistant
+Group=wizardj-assistant
+WorkingDirectory=/opt/wizardj-blog-assistant/runtime
+EnvironmentFile=/var/lib/wizardj-blog-assistant/secrets/assistant.env
+ExecStart=/usr/bin/python3 /opt/wizardj-blog-assistant/runtime/ecs_service.py
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

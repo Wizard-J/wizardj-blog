@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect snapshot for WizardJ %i status
+
+[Service]
+Type=oneshot
+UMask=0027
+ExecStart=/usr/bin/python3 /opt/wizardj-blog-assistant/runtime/ops/status_server.py --collect-%i
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/home-weixin-status

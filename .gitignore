@@ -8,3 +8,7 @@
 /drafts/
 # `content/posts` may point to a private external symlink target.
 /content/posts
+
+__pycache__/
+/deploy/*.env
+/deploy/Caddyfile

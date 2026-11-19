@@ -515,6 +515,7 @@ def configure(server, state_path=STATE_DB):
             publish_root / "site", catalog_path,
             RemotePublisher(key_file, publish_root / "known_hosts", publish_host),
             publish_root / "state", public_article_link=publish_root / "public-articles",
+            hugo_bin=os.getenv("WIZARDJ_HUGO_BIN", "/opt/homebrew/bin/hugo"),
         )
 
 

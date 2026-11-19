@@ -1,0 +1,15 @@
+[Unit]
+Description=WizardJ read-only operations pages
+
+[Service]
+DynamicUser=yes
+SupplementaryGroups=wizardj-status
+ExecStart=/usr/bin/python3 /opt/wizardj-blog-assistant/runtime/ops/status_server.py
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,4 @@
-"""Read-only status view for the cloud Weixin bot."""
+"""Read-only status views for independently running services."""
 from collections import deque
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -120,8 +120,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] in (["--collect"], ["--collect-cf"]):
-        target = SNAPSHOT if sys.argv[1] == "--collect" else CF_SNAPSHOT
+    if sys.argv[1:] in (["--collect-weixin"], ["--collect-cf"]):
+        target = SNAPSHOT if sys.argv[1] == "--collect-weixin" else CF_SNAPSHOT
         data = snapshot() if target == SNAPSHOT else cf_status.collect(cmd)
         data["sampled_at"] = datetime.now(timezone.utc).isoformat()
         tmp = target.with_suffix(".tmp")
