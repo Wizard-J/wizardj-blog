@@ -1,0 +1,48 @@
+--- a/gpt-chat.mjs
++++ b/gpt-chat.mjs
+@@ -46,5 +46,25 @@
+ }
+ 
++function withSearchSources(answer, output) {
++  if (!output.some(item => item.type === 'web_search_call' && item.status === 'completed')) return answer;
++  const sources = new Map();
++  for (const item of output) {
++    for (const part of item.content ?? []) {
++      for (const source of part.annotations ?? []) {
++        if (source.type !== 'url_citation' || typeof source.url !== 'string') continue;
++        const url = URL.parse(source.url);
++        if (url && ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) {
++          sources.set(url.href, source.title?.replace(/\s+/gu, ' ').trim().slice(0, 120) || url.hostname);
++        }
++      }
++    }
++  }
++  if (!sources.size) return answer + '\n\n本次搜索未返回可核实的来源链接。';
++  const references = [...sources].slice(0, 5).map(([url, title], index) => `${index + 1}. ${title}\n${url}`);
++  return `${answer}\n\n来源\n${references.join('\n')}`;
++}
++
+ export async function respond(account, input) {
++  const useSearch = Boolean(account.project);
+   const response = await api(resource + '/responses', {
+     method: 'POST',
+@@ -56,5 +76,8 @@
+     body: JSON.stringify({
+       model: account.model, input, store: false, stream: true,
+-      instructions: '你是用户的微信聊天助手。用用户所用语言简洁回复。需要访问服务器或执行任务时，提示用户用 /执行 加任务描述。',
++      ...(useSearch ? { tools: [{ type: 'web_search' }], tool_choice: 'auto' } : {}),
++      instructions: useSearch
++        ? '你是用户的微信聊天助手。用用户所用语言简洁回复。用户要求查证或询问当前、最新、近期可能变化的信息时，先用网页搜索，优先使用官方网站和一手公告；无法核实就说明。只有需要操作服务器或执行任务时才提及 /执行。'
++        : '你是用户的微信聊天助手。用用户所用语言简洁回复。需要访问服务器或执行任务时，提示用户用 /执行 加任务描述。',
+     }),
+   });
+@@ -74,5 +97,8 @@
+         throw new Error(code && /^[a-z0-9_]{1,80}$/.test(code) ? code : 'GPT 回复未完成');
+       }
+-      if (event.type === 'response.completed' && output.trim()) return output.trim();
++      if (event.type === 'response.completed' && output.trim()) {
++        const answer = output.trim();
++        return useSearch ? withSearchSources(answer, event.response?.output ?? []) : answer;
++      }
+     }
+   }
