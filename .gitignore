@@ -3,7 +3,8 @@
 /.hugo_build.lock
 /.venv/
 /.DS_Store
-/assistant/
+/assistant/__pycache__/
+/assistant/.env*
 /drafts/
 # `content/posts` may point to a private external symlink target.
 /content/posts
