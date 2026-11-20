@@ -1,4 +1,5 @@
 """Private blog chat. Caddy authenticates every proxied request."""
+from html import escape
 import hmac
 from hashlib import sha256
 import json
@@ -8,13 +9,14 @@ from pathlib import Path
 from threading import BoundedSemaphore, Lock, Thread
 from time import sleep
 from types import SimpleNamespace
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID, uuid4
 
 from catalog import Catalog
 from bulk_tags import BulkTags, TagConflict
 from draft_tool import DraftTool
 from frontier_runner import FrontierRunner
+from login import ENTRY_PATHS, SESSION_TTL, Login, return_target, session_cookie
 from memory import Memory
 from model_client import ModelError, stream
 from publisher import PublishError, Publisher, preview_draft
@@ -97,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", "private, no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Referrer-Policy", "same-origin")
         self.send_header("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
         if length is not None:
             self.send_header("Content-Length", str(length))
@@ -116,6 +118,84 @@ class Handler(BaseHTTPRequestHandler):
         return bool(INTERNAL_TOKEN) and hmac.compare_digest(
             self.headers.get("X-Wizardj-Internal", "").encode(), INTERNAL_TOKEN.encode()
         )
+
+    def redirect(self, location, cookie=None):
+        self.send_response(303)
+        self.send_header("Location", location)
+        self.send_header("Cache-Control", "private, no-store")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+
+    def login_page(self, target, status=200, error=""):
+        page = (ROOT / "login.html").read_text(encoding="utf-8")
+        message = f'<p class="error" role="alert">{escape(error)}</p>' if error else ""
+        page = page.replace("{{next}}", escape(target)).replace("<!-- message -->", message)
+        self.send_bytes(status, "text/html; charset=utf-8", page.encode())
+
+    def login_get(self, url):
+        if url.path == "/assistant/login.css":
+            self.send_bytes(200, "text/css; charset=utf-8", (ROOT / "login.css").read_bytes())
+            return
+        login = self.server.login
+        if login is None:
+            self.send_error(503)
+            return
+        signed_in = login.signed_in(self.headers.get("Cookie", ""))
+        if url.path == "/assistant/login":
+            target = return_target(parse_qs(url.query).get("next", [""])[0])
+            if signed_in:
+                self.redirect(target)
+            else:
+                self.login_page(target)
+            return
+        if signed_in:
+            self.send_bytes(200, "text/plain", b"")
+            return
+        original_uri = self.headers.get("X-Forwarded-Uri", "")
+        if (self.headers.get("X-Forwarded-Method") in {"GET", "HEAD"}
+                and original_uri.partition("?")[0] in ENTRY_PATHS):
+            query = urlencode({"next": return_target(original_uri)})
+            self.redirect(f"/assistant/login?{query}")
+        else:
+            self.send_json(401, {"error": "请先登录博客助手"})
+
+    def login_post(self, path):
+        login = self.server.login
+        if login is None:
+            self.send_error(503)
+            return
+        cookie = self.headers.get("Cookie", "")
+        if path == "/assistant/logout":
+            login.sign_out(cookie)
+            self.redirect("/assistant/login", session_cookie())
+            return
+        if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+            self.send_error(415)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 8192:
+                raise ValueError
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise ValueError
+            form = parse_qs(body.decode("ascii"), max_num_fields=3, errors="strict")
+            if set(form) != {"username", "password", "next"} or any(len(values) != 1 for values in form.values()):
+                raise ValueError
+            username, password, target = (form[key][0] for key in ("username", "password", "next"))
+            if len(username) > 256 or len(password) > 256:
+                raise ValueError
+        except ValueError:
+            self.login_page("/assistant/", 400, "请填写用户名和密码后重试。")
+            return
+        target = return_target(target)
+        status, token = login.sign_in(username, password, cookie)
+        if token:
+            self.redirect(target, session_cookie(token, SESSION_TTL))
+        else:
+            error = "尝试次数过多，请稍后再试。" if status == 429 else "用户名或密码不正确。"
+            self.login_page(target, status, error)
 
     def select_persona(self, query):
         params = parse_qs(query, keep_blank_values=True)
@@ -154,11 +234,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         url = urlsplit(self.path)
         path = url.path
+        if path in {"/assistant/login", "/assistant/login.css", "/_assistant_session"}:
+            self.login_get(url)
+            return
         if path.startswith("/assistant/api/") and not self.select_persona(url.query):
             return
         if path == "/assistant":
             self.send_response(308)
-            self.send_header("Location", "/assistant/")
+            self.send_header("Location", return_target(self.path))
             self.end_headers()
         elif path in PAGES:
             filename, content_type = PAGES[path]
@@ -273,10 +356,13 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized_proxy() or self.headers.get("Origin") != ORIGIN:
             self.send_error(403)
             return
+        url = urlsplit(self.path)
+        if url.path in {"/assistant/login", "/assistant/logout"}:
+            self.login_post(url.path)
+            return
         if self.headers.get_content_type() != "application/json":
             self.send_error(415)
             return
-        url = urlsplit(self.path)
         if not self.select_persona(url.query):
             return
         path = url.path
@@ -522,6 +608,9 @@ def configure(server, state_path=STATE_DB):
 def serve(port=8765, state_path=STATE_DB):
     with ThreadingHTTPServer(("127.0.0.1", port), Handler) as server:
         configure(server, state_path)
+        username = os.environ.get("WIZARDJ_LOGIN_USER")
+        hash_file = os.environ.get("WIZARDJ_LOGIN_HASH_FILE")
+        server.login = Login(username or "", hash_file) if hash_file else None
         for persona in server.personas.values():
             Thread(target=refresh_memory, args=(persona.memory,), daemon=True).start()
         server.serve_forever()

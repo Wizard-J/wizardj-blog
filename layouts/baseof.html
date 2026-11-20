@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ if not .IsHome }}{{ .Title }} · {{ end }}{{ site.Title }}</title>
+  <link rel="icon" href="{{ "favicon.ico" | relURL }}">
   <link rel="canonical" href="{{ .Permalink }}">
   <link rel="stylesheet" href="{{ "blog.css" | relURL }}?v={{ substr (sha256 (readFile "static/blog.css")) 0 12 }}">
   {{ with .OutputFormats.Get "RSS" }}<link rel="alternate" type="application/rss+xml" href="{{ .RelPermalink }}">{{ end }}

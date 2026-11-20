@@ -1,26 +1,43 @@
 {$BLOG_DOMAIN} {
 	@assistant path /assistant /assistant/*
 	handle @assistant {
-		basicauth {
-			{$BLOG_ADMIN_USER} {$BLOG_ADMIN_HASH}
-		}
-		@cf_control path /assistant/cf-select/operation.json /assistant/cf-select/test /assistant/cf-select/publish/*
-		handle @cf_control {
-			reverse_proxy unix//run/wizardj-cf-control/control.sock {
-				header_up -Authorization
+		route {
+			@account path /assistant/login /assistant/login.css /assistant/logout
+			handle @account {
+				reverse_proxy 127.0.0.1:18766 {
+					header_up -Authorization
+					header_up X-Wizardj-Internal {$WIZARDJ_INTERNAL_TOKEN}
+				}
 			}
-		}
-		@ops path /assistant/weixin/* /assistant/cf-select/*
-		handle @ops {
-			reverse_proxy 127.0.0.1:18767 {
-				header_up -Authorization
-			}
-		}
-		handle {
-			reverse_proxy 127.0.0.1:18766 {
+
+			forward_auth 127.0.0.1:18766 {
+				uri /_assistant_session
 				header_up -Authorization
 				header_up X-Wizardj-Internal {$WIZARDJ_INTERNAL_TOKEN}
-				flush_interval -1
+			}
+
+			@cf_control path /assistant/cf-select/operation.json /assistant/cf-select/test /assistant/cf-select/publish/*
+			handle @cf_control {
+				reverse_proxy unix//run/wizardj-cf-control/control.sock {
+					header_up -Authorization
+					header_up -Cookie
+				}
+			}
+
+			@ops path /assistant/weixin/* /assistant/cf-select/*
+			handle @ops {
+				reverse_proxy 127.0.0.1:18767 {
+					header_up -Authorization
+					header_up -Cookie
+				}
+			}
+			handle {
+				reverse_proxy 127.0.0.1:18766 {
+					header_up -Authorization
+					header_up -Cookie
+					header_up X-Wizardj-Internal {$WIZARDJ_INTERNAL_TOKEN}
+					flush_interval -1
+				}
 			}
 		}
 	}

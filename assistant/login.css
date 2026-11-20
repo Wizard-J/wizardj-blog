@@ -1,0 +1,75 @@
+:root {
+  color-scheme: light dark;
+  font: 16px/1.55 Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --background: #f1f5f9;
+  --surface: #fff;
+  --text: #0f172a;
+  --muted: #475569;
+  --border: #64748b;
+  --accent: #1e3a5f;
+  --on-accent: #fff;
+  --error: #9f1239;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #080f1c;
+    --surface: #111c2d;
+    --text: #f8fafc;
+    --muted: #a8b3c7;
+    --border: #8294ae;
+    --accent: #a4c8f1;
+    --on-accent: #101b2a;
+    --error: #fda4af;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  display: grid;
+  place-items: center;
+  min-height: 100svh;
+  margin: 0;
+  padding: 24px 16px;
+  background: var(--background);
+  color: var(--text);
+}
+main { width: min(100%, 420px); }
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 8px;
+  color: var(--accent);
+  text-underline-offset: 4px;
+}
+section {
+  padding: clamp(20px, 7vw, 36px);
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: 0 12px 36px #0f172a1f;
+}
+h1 { margin: 0; font-size: 1.75rem; line-height: 1.25; }
+p { margin: 8px 0 24px; color: var(--muted); }
+form { display: grid; gap: 16px; }
+label { display: block; margin-bottom: 5px; font-weight: 600; }
+input, button {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 8px;
+  font: inherit;
+}
+input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+button {
+  margin-top: 4px;
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+  cursor: pointer;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.error { color: var(--error); margin-bottom: 16px; }
